@@ -6,23 +6,16 @@ import java.util.Collections;
 import java.util.List;
 
 public class LDAModel {
-
-    String dir;
-    String dfile; //data file
-    String vfile; //vocabulary file
     String modelName;
+    LDAOptions options;
     LDAData data;
 
     int M; //number of documents
     int V; //vocabulary size
     int K; //number of topics
-    double alpha; //hyperparameter of topic Dirichlet prior
-    double beta; //hyperparameter of word Dirichlet prior
+    double alpha; //symmetric hyperparameter of document-topic Dirichlet prior
+    double beta; //symmetric hyperparameter of topic-word(term) Dirichlet prior
 
-    int iterationNum; //number of Gibbs sampling iteration
-    int saveIter; //the iteration at which the model was saved
-    int saveStep; //saving period
-    int topWords; //print out top words per each topic
 
     double[][] theta; //theta: document - topic distributions, size M * K
     double[][] phi; // phi: topic-word distributions, size K * V
@@ -34,20 +27,15 @@ public class LDAModel {
     int[] ndsum; //ndsum[i]: total number of words in document i, size M
 
     public LDAModel() {
-        dir = "./";
-        dfile = "traindocs.dat";
-        vfile = "vocabulary.txt";
         modelName = "";
+        options = null;
+        data = null;
 
         M = 0;
         V = 0;
         K = 100;
         alpha = 50.0 / K;
         beta = 0.1;
-
-        iterationNum = 2000;
-        saveIter = 0;
-        saveStep = 10;
 
         theta = null;
         phi = null;
@@ -60,37 +48,26 @@ public class LDAModel {
     }
 
     protected void initialize(LDAOptions options) {
+        this.options = options;
+
         modelName = options.modelName;
         K = options.topicNum;
-
         alpha = options.alpha;
-        if (alpha < 0.0)
-            alpha = 50.0 / K;
+        beta = options.beta;
 
-        if (options.beta >= 0)
-            beta = options.beta;
-
-        iterationNum = options.iterationNum;
-        topWords = options.topWords;
-        dir = options.dir;
-        if (dir.endsWith(File.separator))
-            dir = dir.substring(0, dir.length() - 1);
-        dfile = options.dataFile;
-        vfile = options.vocabularyFile;
-        saveStep = options.saveStep;
+        data = new LDAData();
+        loadData();
     }
 
     /**
      * Load data for estimation
      */
-    public void loadData() {
-        data = LDAData.readData(dir + File.separator + dfile);
-        if (data == null) {
-            System.err.println("Fail to read training data!\n");
-            System.exit(0);
-        }
-        M = data.M;
-        V = data.V;
+    private void loadData() {
+        data.loadStopwords(options.dir + File.separator + options.sfile);
+        data.loadDocs(options.dir + File.separator + options.dfile);
+
+        M = data.docs.size();
+        V = data.vocabulary.V;
 
         nw = new int[V][K];
         for (int w = 0; w < V; w++) {
@@ -231,7 +208,7 @@ public class LDAModel {
                 }
                 writer.write("Topic " + k + ":\n");
                 Collections.sort(wordsFreqList);
-                for (int i = 0; i < topWords; i++) {
+                for (int i = 0; i < options.topWords; i++) {
                     String word = data.vocabulary.getWord((Integer)wordsFreqList.get(i).first);
                     writer.write("\t" + word + " " + wordsFreqList.get(i).second + "\n");
                 }
@@ -247,10 +224,10 @@ public class LDAModel {
      * Save All
      */
     public void saveModel(String modelName) {
-        saveTopicAssign(dir + File.separator + modelName + "TopicAssign");
-        saveParams(dir + File.separator + modelName + "Other");
-        saveTheta(dir + File.separator + modelName + "Theta");
-        savePhi(dir + File.separator + modelName + "Phi");
-        saveTopWords(dir + File.separator + modelName + "TopWords");
+        saveTopicAssign(options.dir + File.separator + modelName + "TopicAssign");
+        saveParams(options.dir + File.separator + modelName + "Other");
+        saveTheta(options.dir + File.separator + modelName + "Theta");
+        savePhi(options.dir + File.separator + modelName + "Phi");
+        saveTopWords(options.dir + File.separator + modelName + "TopWords");
     }
 }

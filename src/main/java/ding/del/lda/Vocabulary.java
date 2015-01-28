@@ -5,10 +5,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Vocabulary {
+    int V;
     Map<String, Integer> wordToIndex;
     Map<Integer, String> indexToWord;
 
     public Vocabulary(){
+        V = 0;
         wordToIndex = new HashMap<String, Integer>();
         indexToWord = new HashMap<Integer, String>();
     }
@@ -30,12 +32,10 @@ public class Vocabulary {
     }
 
     public int addWord(String word){
-        if (!contains(word)){
-            int index = wordToIndex.size();
-
+        if (!contains(word)) {
+            int index = V++;
             wordToIndex.put(word, index);
             indexToWord.put(index, word);
-
             return index;
         }
         else return getIndex(word);
@@ -45,10 +45,10 @@ public class Vocabulary {
      * read vocabulary from file
      * each line contains a word and its index
      */
-    public boolean readVocabulary(String vocabularyFile) {
+    public void readVocabulary(String vfile) {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    new FileInputStream(vocabularyFile), "UTF-8"));
+                    new FileInputStream(vfile), "UTF-8"));
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] tokens = line.split("\\s");
@@ -57,32 +57,27 @@ public class Vocabulary {
                 indexToWord.put(index, word);
                 wordToIndex.put(word, index);
             }
+            V = indexToWord.size();
             reader.close();
-            return true;
         }
         catch (Exception e) {
-            System.out.println("Error while reading vocabulary: " + e.getMessage());
-            e.printStackTrace();
-            return false;
+            System.err.println("Error while reading vocabulary: " + e.getMessage());
         }
     }
 
-    public boolean writeVocabulary(String vocabularyFile){
+    public void writeVocabulary(String vfile){
         try {
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
-                    new FileOutputStream(vocabularyFile), "UTF-8"));
+                    new FileOutputStream(vfile), "UTF-8"));
 
             for (String word : wordToIndex.keySet()) {
                 Integer index = wordToIndex.get(word);
                 writer.write(word + " " + index + "\n");
             }
             writer.close();
-            return true;
         }
         catch (Exception e){
-            System.out.println("Error while writing vocabulary: " + e.getMessage());
-            e.printStackTrace();
-            return false;
+            System.err.println("Error while writing vocabulary: " + e.getMessage());
         }
     }
 }

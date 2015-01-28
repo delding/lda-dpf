@@ -8,17 +8,24 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
+import java.io.File;
+
 public class LDAOptions {
 
-    String modelName = "";
-    String dir = "";
-    String dataFile = "";
-    String vocabularyFile = "";
-    double alpha = -1.0;
-    double beta = -1.0;
+    String modelName = "unnamed-model";
+    String dir = "./";
+    String dfile = "documents.txt"; //data file
+    String vfile = "vocabulary.txt"; //vocabulary file
+    String sfile = "stopwords.txt"; //stopwords file
+
     int topicNum = 100;
-    int iterationNum = 1000;
-    int saveStep = 100; //number of steps to save the model since the last save
+    double alpha = 50.0 / topicNum;
+    double beta = 0.1;
+
+
+    int iterationNum = 1000; //number of Gibbs sampling iteration
+    int burnIn = 100; //number of iterations for burn-in period
+    int saveInterval = 100; //saving period
     int topWords = 10; //the number of most likely words to be printed for each topic
 
     /**
@@ -38,14 +45,20 @@ public class LDAOptions {
 
             if (line.hasOption("dir")) {
                 this.dir = line.getOptionValue("dir");
+                if (this.dir.endsWith(File.separator))
+                    this.dir = this.dir.substring(0, this.dir.length() - 1);
             }
 
             if (line.hasOption("dfile")) {
-                this.dataFile = line.getOptionValue("dfile");
+                this.dfile = line.getOptionValue("dfile");
             }
 
             if (line.hasOption("vfile")) {
-                this.vocabularyFile = line.getOptionValue("vfile");
+                this.vfile = line.getOptionValue("vfile");
+            }
+
+            if (line.hasOption("sfile")) {
+                this.sfile = line.getOptionValue("sfile");
             }
 
             if (line.hasOption("alpha")) {
@@ -64,8 +77,12 @@ public class LDAOptions {
                 this.iterationNum = Integer.parseInt(line.getOptionValue("niters"));
             }
 
-            if (line.hasOption("savestep")) {
-                this.saveStep = Integer.parseInt(line.getOptionValue("savestep"));
+            if (line.hasOption("burn")) {
+                this.burnIn = Integer.parseInt(line.getOptionValue("burn"));
+            }
+
+            if (line.hasOption("saveInterval")) {
+                this.saveInterval = Integer.parseInt(line.getOptionValue("saveInterval"));
             }
 
             if (line.hasOption("twords")) {
@@ -92,6 +109,9 @@ public class LDAOptions {
         Option vfile = OptionBuilder.withArgName("file").hasArg().withDescription("vocabulary file").create("vfile");
         options.addOption(vfile);
 
+        Option sfile = OptionBuilder.withArgName("file").hasArg().withDescription("stopwords file").create("sfile");
+        options.addOption(sfile);
+
         Option alpha = OptionBuilder.withArgName("value").hasArg().withDescription("alpha").create("alpha");
         options.addOption(alpha);
 
@@ -106,9 +126,13 @@ public class LDAOptions {
                 "number of iterations").create("niters");
         options.addOption(niters);
 
-        Option savestep = OptionBuilder.withArgName("number").hasArg().withDescription(
-                "number of steps to save the model since the last save").create("savestep");
-        options.addOption(savestep);
+        Option burn = OptionBuilder.withArgName("number").hasArg().withDescription(
+                "number of iterations for burn-in period").create("burn");
+        options.addOption(burn);
+
+        Option saveInterval = OptionBuilder.withArgName("number").hasArg().withDescription(
+                "number of steps to save the model since the last save").create("saveInterval");
+        options.addOption(saveInterval);
 
         Option twords = OptionBuilder.withArgName("number").hasArg().withDescription(
                 "number of most likely words to be displayed for each topic").create("twords");

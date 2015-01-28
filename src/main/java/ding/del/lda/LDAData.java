@@ -8,106 +8,164 @@ import java.util.ArrayList;
 public class LDAData {
 
     Vocabulary vocabulary;
+    Stopwords stopwords;
     ArrayList<Document> docs;
-    int M; 			 		// number of documents
-    int V;			 		// number of words in the vocabulary
 
     public LDAData() {
         vocabulary = new Vocabulary();
-        M = 0;
-        V = 0;
+        stopwords = new Stopwords();
         docs = new ArrayList<Document>();
     }
 
     public LDAData(int M) {
         vocabulary = new Vocabulary();
-        this.M = M;
-        this.V = 0;
+        stopwords = new Stopwords();
         docs = new ArrayList<Document>(M);
     }
 
-    /**
-     * set the document at the index idx if idx is greater than 0 and less than M
-     * @param doc document to be set
-     * @param idx index in the document array
-     */
-    public void setDoc(Document doc, int idx) {
-        if (0 <= idx && idx < M) {
-            docs.add(idx, doc);
-        }
+    public LDAData(int M, String sfile) {
+        vocabulary = new Vocabulary();
+        stopwords = new Stopwords();
+        loadStopwords(sfile);
+        docs = new ArrayList<Document>(M);
+    }
+
+    public LDAData(String sfile) {
+        vocabulary = new Vocabulary();
+        stopwords = new Stopwords();
+        loadStopwords(sfile);
+        docs = new ArrayList<Document>();
+    }
+
+    public void loadStopwords(String filename) {
+        stopwords.loadStopwords(filename);
+    }
+
+    public void saveVocabulary(String filename) {
+        vocabulary.writeVocabulary(filename);
     }
 
     /**
-     * set the document at the index idx if idx is greater than 0 and less than M
-     * @param str string contains doc
-     * @param idx index in the document array
+     * @param filename
+     *  read documents from a file, each line contains a document, create new vocabulary
      */
-    public void setDoc(String str, int idx) {
-        if (0 <= idx && idx < M) {
-            String [] words = str.split("\\s");
-            int length = words.length;
-            int [] indexes = new int[length];
-
-            for (int i = 0; i < length; ++i) {
-                indexes[i] = vocabulary.getIndex(words[i]);
-            }
-
-            Document doc = new Document(length, indexes);
-            docs.add(idx, doc);
-        }
-    }
-
-    /**
-     *  read a data from a stream, create new vocabulary
-     *  @return LDAData if success and null otherwise
-     */
-    public static LDAData readData(String filename){
+    public void loadDocs(String filename) {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(
                     new FileInputStream(filename), "UTF-8"));
-            LDAData data = readData(reader);
+            loadDocs(reader);
             reader.close();
-            return data;
         }
-        catch (Exception e){
+        catch (Exception e) {
             System.out.println("Read Data Error: " + e.getMessage());
             e.printStackTrace();
-            return null;
         }
     }
 
     /**
-     *  read a data from a stream, create new vocabulary
-     *  @return LDAData if success and null otherwise
+     *  read a data from a stream, each line contains a document, create new vocabulary
      */
-    public static LDAData readData(BufferedReader reader) {
+    public void loadDocs(BufferedReader reader) {
         try {
-            LDAData data = new LDAData();
             String line;
-            int i = 0;
             while ((line = reader.readLine()) != null) {
-                data.setDoc(line, i);
-                ++i;
+                addDoc(line);
             }
-            return data;
         }
         catch (Exception e){
             System.out.println("Read Data Error: " + e.getMessage());
             e.printStackTrace();
-            return null;
         }
     }
 
     /**
      * read a data from a string, create new dictionary
      * @param strs String from which we get the data, documents are separated by newline character
-     * @return data if success and null otherwise
      */
-    public static LDAData readData(String [] strs) {
-        LDAData data = new LDAData(strs.length);
-        for (int i = 0 ; i < strs.length; ++i) {
-            data.setDoc(strs[i], i);
+    public void loadDocs(String[] strs) {
+        for (String str : strs) {
+            addDoc(str);
         }
-        return data;
     }
+
+    /**
+     * add the document to docs
+     * stop words are filtered, vocabulary is updated
+     * @param doc document to be set
+     */
+    public void addDoc(Document doc) {
+        docs.add(doc);
+    }
+
+    /**
+     * add the document to docs
+     * stop words are filtered, vocabulary is updated
+     * @param str string contains doc
+     */
+    public void addDoc(String str) {
+        addDoc(createDoc(str));
+    }
+
+    /**
+     * create a new document from a string
+     * stop words are filtered, vocabulary is updated
+     * @param str string that contains the document
+     * @return new document
+     */
+    private Document createDoc(String str) {
+        String [] words = str.split("\\s");
+        ArrayList<Integer> indexes = new ArrayList<Integer>();
+        for(String word : words) {
+            if (!stopwords.isStopword(word)) {
+                if(vocabulary.contains(word)) {
+                    indexes.add(vocabulary.getIndex(word));
+                } else {
+                    indexes.add(vocabulary.addWord(word));
+                }
+            }
+        }
+        return new Document(indexes);
+    }
+
+    public static class Document {
+        String docName;
+        int [] words;
+        int length;
+
+        public Document() {
+            words = null;
+            docName = "";
+            length = 0;
+        }
+
+        public Document(int length) {
+            this.length = length;
+            docName = "";
+            words = new int[length];
+        }
+
+        public Document(int length, int [] words) {
+            this.length = length;
+            docName = "";
+            this.words = new int[length];
+            System.arraycopy(words, 0, this.words, 0, length);
+        }
+
+        public Document(ArrayList<Integer> words) {
+            length = words.size();
+            docName = "";
+            this.words = new int[length];
+            for (int i = 0; i < length; ++i) {
+                this.words[i] = words.get(i);
+            }
+        }
+
+        public Document(int length, int [] words, String docName) {
+            this.length = length;
+            this.docName = docName;
+            this.words = new int[length];
+            System.arraycopy(words, 0, this.words, 0, length);
+        }
+    }
+
 }

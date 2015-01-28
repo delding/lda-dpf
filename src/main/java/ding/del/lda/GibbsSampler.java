@@ -2,38 +2,36 @@ package ding.del.lda;
 
 import java.io.File;
 
-public class Gibbs {
+public class GibbsSampler {
     LDAModel trnModel; //model to be trained
-    LDAOptions options;
 
     public void initialize(LDAOptions options) {
-        this.options = options;
         trnModel = new LDAModel();
         trnModel.initialize(options);
-        trnModel.data.vocabulary.writeVocabulary(options.dir + File.separator + options.vocabularyFile);
     }
 
     public void estimate() {
-        System.out.println("Sampling " + trnModel.iterationNum + " iterations!");
-        for (int i = 0; i < trnModel.iterationNum; ++i) {
+        System.out.println("Sampling " + trnModel.options.iterationNum + " iterations!");
+        for (int i = 0; i < trnModel.options.iterationNum; ++i) {
             System.out.println("Iteration " + i + " ...");
 
-            if ((i >= trnModel.saveStep) && ((i - trnModel.saveIter) % options.saveStep == 0)) {
+            if ((i >= trnModel.options.saveInterval) &&
+                    ((i - trnModel.options.burnIn) % trnModel.options.saveInterval == 0)) {
                 System.out.println("Saving the model at iteration " + i + " ...");
                 computeTheta();
                 computePhi();
-                trnModel.saveModel("model-iteration-" + trnModel.saveIter);
+                trnModel.saveModel("model-iteration-" + trnModel.options.burnIn);
             }
 
             for (int m = 0; m < trnModel.M; m++) {
                 for (int n = 0; n < trnModel.data.docs.get(m).length; n++) {
-                    int newTopic = sampling(m, n);
+                    int newTopic = gibbsSampling(m, n);
                     trnModel.z[m][n] = newTopic;
                 }
             }
         }
 
-        System.out.println("Gibbs sampling completed!\n");
+        System.out.println("Gibbs gibbsSampling completed!\n");
         System.out.println("Saving the final model!\n");
         computeTheta();
         computePhi();
@@ -41,12 +39,12 @@ public class Gibbs {
     }
 
     /**
-     * Do sampling
+     * Do gibbsSampling
      * @param m document number
      * @param n word number
      * @return topic assignment index
      */
-    public int sampling(int m, int n){
+    private int gibbsSampling(int m, int n) {
         // remove z_i from the count variable
         int topic = trnModel.z[m][n];
         int w = trnModel.data.docs.get(m).words[n];
@@ -58,14 +56,14 @@ public class Gibbs {
         double Vbeta = trnModel.V * trnModel.beta;
         double Kalpha = trnModel.K * trnModel.alpha;
 
-        // Compute p(z_i = k | z_-i, w) via collapsed Gibbs sampling
+        // Compute p(z_i = k | z_-i, w) via collapsed Gibbs gibbsSampling
         double [] p = new double[trnModel.K];
         for (int k = 0; k < trnModel.K; k++) {
             p[k] = (trnModel.nw[w][k] + trnModel.beta)/(trnModel.nwsum[k] + Vbeta) *
                     (trnModel.nd[m][k] + trnModel.alpha)/(trnModel.ndsum[m] + Kalpha);
         }
 
-        // Sample a new topic label for w_{m, n} from multinomial (p[0], p[1], ... , p[K-1])
+        // Do multinomial gibbsSampling for a new topic label of w_{m, n} from Multi(p[0], p[1], ... , p[K-1])
         // Compute cumulative probability for p
         for (int k = 1; k < trnModel.K; k++){
             p[k] += p[k - 1];
