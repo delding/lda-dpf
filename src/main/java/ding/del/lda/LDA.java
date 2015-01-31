@@ -1,5 +1,7 @@
 package ding.del.lda;
 
+import java.io.File;
+
 public class LDA {
 
     public static void main(String[] args) {
@@ -7,6 +9,7 @@ public class LDA {
         GibbsSampler sampler = new GibbsSampler();
         sampler.initialize(options);
         sampler.estimate();
+        sampler.trnModel.corpus.saveVocabulary(options.dir + File.separator + options.vfile);
     }
 
 }

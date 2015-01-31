@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="lda-dpf:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/lda_dpf_jar</output-path>
+    <root id="archive" name="lda-dpf.jar">
+      <element id="module-output" name="lda-dpf" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/commons-cli/commons-cli/1.2/commons-cli-1.2.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

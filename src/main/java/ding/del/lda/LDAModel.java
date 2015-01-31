@@ -8,7 +8,7 @@ import java.util.List;
 public class LDAModel {
     String modelName;
     LDAOptions options;
-    LDAData data;
+    LDACorpus corpus;
 
     int M; //number of documents
     int V; //vocabulary size
@@ -29,7 +29,7 @@ public class LDAModel {
     public LDAModel() {
         modelName = "";
         options = null;
-        data = null;
+        corpus = null;
 
         M = 0;
         V = 0;
@@ -55,19 +55,19 @@ public class LDAModel {
         alpha = options.alpha;
         beta = options.beta;
 
-        data = new LDAData();
-        loadData();
+        corpus = new LDACorpus();
+        loadCorpus();
     }
 
     /**
-     * Load data for estimation
+     * Load corpus for estimation
      */
-    private void loadData() {
-        data.loadStopwords(options.dir + File.separator + options.sfile);
-        data.loadDocs(options.dir + File.separator + options.dfile);
+    private void loadCorpus() {
+        corpus.loadStopwords(options.dir + File.separator + options.sfile);
+        corpus.loadDocs(options.dir + File.separator + options.cfile);
 
-        M = data.docs.size();
-        V = data.vocabulary.V;
+        M = corpus.docs.size();
+        V = corpus.vocabulary.V;
 
         nw = new int[V][K];
         for (int w = 0; w < V; w++) {
@@ -96,13 +96,13 @@ public class LDAModel {
         // The z_i are are initialized to values in [0, K - 1] for each word
         z = new int[M][];
         for (int m = 0; m < M; m++) {
-            int N = data.docs.get(m).length;
+            int N = corpus.docs.get(m).length;
             z[m] = new int[N];
             for (int n = 0; n < N; n++) {
                 int topic = (int) (Math.random() * K);
                 z[m][n] = topic;
                 // number of instances of word i (i = documents[m][n]) assigned to topic j (j=z[m][n])
-                nw[data.docs.get(m).words[n]][topic]++;
+                nw[corpus.docs.get(m).words[n]][topic]++;
                 // number of words in document i assigned to topic j
                 nd[m][topic]++;
                 // total number of words assigned to topic j.
@@ -124,8 +124,8 @@ public class LDAModel {
             BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
             //write docs with topic assignments for words
             for (int i = 0; i < M; ++i) {
-                for (int j = 0; j < data.docs.get(i).length; ++j) {
-                    writer.write(data.docs.get(i).words[j] + ":" + z[i][j] + " ");
+                for (int j = 0; j < corpus.docs.get(i).length; ++j) {
+                    writer.write(corpus.docs.get(i).words[j] + ":" + z[i][j] + " ");
                 }
                 writer.write("\n");
             }
@@ -209,7 +209,7 @@ public class LDAModel {
                 writer.write("Topic " + k + ":\n");
                 Collections.sort(wordsFreqList);
                 for (int i = 0; i < options.topWords; i++) {
-                    String word = data.vocabulary.getWord((Integer)wordsFreqList.get(i).first);
+                    String word = corpus.vocabulary.getWord((Integer)wordsFreqList.get(i).first);
                     writer.write("\t" + word + " " + wordsFreqList.get(i).second + "\n");
                 }
             }

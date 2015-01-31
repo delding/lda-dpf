@@ -14,7 +14,7 @@ public class LDAOptions {
 
     String modelName = "unnamed-model";
     String dir = "./";
-    String dfile = "documents.txt"; //data file
+    String cfile = "documents.txt"; //corpus file
     String vfile = "vocabulary.txt"; //vocabulary file
     String sfile = "stopwords.txt"; //stopwords file
 
@@ -49,8 +49,8 @@ public class LDAOptions {
                     this.dir = this.dir.substring(0, this.dir.length() - 1);
             }
 
-            if (line.hasOption("dfile")) {
-                this.dfile = line.getOptionValue("dfile");
+            if (line.hasOption("cfile")) {
+                this.cfile = line.getOptionValue("cfile");
             }
 
             if (line.hasOption("vfile")) {
@@ -103,8 +103,8 @@ public class LDAOptions {
         Option dir = OptionBuilder.withArgName("path").hasArg().withDescription("directory").create("dir");
         options.addOption(dir);
 
-        Option dfile = OptionBuilder.withArgName("file").hasArg().withDescription("data file").create("dfile");
-        options.addOption(dfile);
+        Option cfile = OptionBuilder.withArgName("file").hasArg().withDescription("corpus file").create("cfile");
+        options.addOption(cfile);
 
         Option vfile = OptionBuilder.withArgName("file").hasArg().withDescription("vocabulary file").create("vfile");
         options.addOption(vfile);

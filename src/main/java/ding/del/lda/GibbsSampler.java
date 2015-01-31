@@ -1,7 +1,5 @@
 package ding.del.lda;
 
-import java.io.File;
-
 public class GibbsSampler {
     LDAModel trnModel; //model to be trained
 
@@ -20,11 +18,11 @@ public class GibbsSampler {
                 System.out.println("Saving the model at iteration " + i + " ...");
                 computeTheta();
                 computePhi();
-                trnModel.saveModel("model-iteration-" + trnModel.options.burnIn);
+                trnModel.saveModel(trnModel.options.modelName + "-iteration" + i);
             }
 
             for (int m = 0; m < trnModel.M; m++) {
-                for (int n = 0; n < trnModel.data.docs.get(m).length; n++) {
+                for (int n = 0; n < trnModel.corpus.docs.get(m).length; n++) {
                     int newTopic = gibbsSampling(m, n);
                     trnModel.z[m][n] = newTopic;
                 }
@@ -35,7 +33,7 @@ public class GibbsSampler {
         System.out.println("Saving the final model!\n");
         computeTheta();
         computePhi();
-        trnModel.saveModel("model-final");
+        trnModel.saveModel(trnModel.options.modelName + "-final");
     }
 
     /**
@@ -47,7 +45,7 @@ public class GibbsSampler {
     private int gibbsSampling(int m, int n) {
         // remove z_i from the count variable
         int topic = trnModel.z[m][n];
-        int w = trnModel.data.docs.get(m).words[n];
+        int w = trnModel.corpus.docs.get(m).words[n];
         trnModel.nw[w][topic] -= 1;
         trnModel.nd[m][topic] -= 1;
         trnModel.nwsum[topic] -= 1;
@@ -65,7 +63,7 @@ public class GibbsSampler {
 
         // Do multinomial gibbsSampling for a new topic label of w_{m, n} from Multi(p[0], p[1], ... , p[K-1])
         // Compute cumulative probability for p
-        for (int k = 1; k < trnModel.K; k++){
+        for (int k = 1; k < trnModel.K; k++) {
             p[k] += p[k - 1];
         }
 
