@@ -1,16 +1,14 @@
 package ding.del.lda;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Random;
+import java.io.*;
+import java.util.*;
 
 public class ParticleFilter {
   LDACorpus corpus =  null; // a single observation in this corpus contains a mini-batch of documents
   LDAOptions options;
 
   int V;
-  int K = 100;
+  int K = 50;
   double beta = 0.1;
 
   int windowSize; // length of sliding window
@@ -34,6 +32,7 @@ public class ParticleFilter {
   LinkedList<ArrayList<int[]>> nwsumQueue;
 
   ArrayList<Document> observe = null; // current observation
+  int offset = 0; // offset of current observation in corpus
 
   Random rand = new Random();
 
@@ -41,6 +40,7 @@ public class ParticleFilter {
     this.windowSize = windowSize;
     this.numParticles = numParticles;
     particlesQueue = new LinkedList<ArrayList<Particle>>();
+    resampleIndexQueue = new LinkedList<int[]>();
     weights = new double[numParticles];
     nwQueue = new LinkedList<ArrayList<int[][]>>();
     nwsumQueue = new LinkedList<ArrayList<int[]>>();
@@ -64,7 +64,7 @@ public class ParticleFilter {
     this.V = corpus.vocabulary.V;
   }
 
-  private void initParticles() {
+  public void initParticles() {
     ArrayList<int[][]> nw = new ArrayList<int[][]>(numParticles);
     ArrayList<int[]> nwsum = new ArrayList<int[]>(numParticles);
     int[][] nw0 = new int[V][K];
@@ -128,10 +128,19 @@ public class ParticleFilter {
     }
     // add initialized particle to the queue
     this.particlesQueue.addFirst(particles);
+    // initialize weights
+    for (int p = 0; p < numParticles; p++) {
+      weights[p] = 1.0 / numParticles;
+    }
   }
 
-  void setObserve(ArrayList<Document> observe) {
+  void setObserve(int numDocsPerOb) {
+    ArrayList<Document> observe = new ArrayList<Document>(numDocsPerOb);
+    for (int i = 0; i < numDocsPerOb; i++) {
+      observe.add(corpus.docs.get(offset + i));
+    }
     this.observe = observe;
+    offset += numDocsPerOb;
   }
 
   /**
@@ -233,7 +242,7 @@ public class ParticleFilter {
     }
   }
 
-  void resample(double[] weights, int numResamples) {
+  void resample(int numResamples) {
     int[] resampleCounts = new int[numParticles];
     double ran = rand.nextDouble() / numResamples;
     double weightCumulative = 0.0;
@@ -361,9 +370,156 @@ public class ParticleFilter {
     }
   }
 
+  public void run(int numDocsPerOb) {
+    setObserve(numDocsPerOb);
+    updatePreWeights();
+    resample(numParticles);
+    propagate();
+    updateWeights();
+  }
+
   private double gaussian(double x, double mu , double sigma) {
     return Math.exp(-Math.pow(mu - x, 2) / Math.pow(sigma, 2) / 2.0)
         / Math.sqrt(2.0 * Math.PI * Math.pow(sigma, 2));
+  }
+
+  public int[] topWeightIdx(int topParticleNum) {
+    int[] topIdx = new int[topParticleNum];
+    Map<Double, Integer> sortedMap = new TreeMap<Double, Integer>();
+    for (int p = 0; p < numParticles; p++) {
+      // multiplying -1 makes max weight become first value in natural ordering
+      sortedMap.put(-1 * weights[p], p);
+    }
+    int i = 0;
+    for(Map.Entry<Double, Integer> entry : sortedMap.entrySet()) {
+      if ( i == topParticleNum ) {
+        break;
+      }
+      topIdx[i] = entry.getValue();
+      i++;
+    }
+    return topIdx;
+  }
+
+  public double[] computeTheta(double[] eta) {
+    double[] theta = new double[eta.length];
+    double sum = 0.0;
+    for (double anEta : eta) {
+      sum += Math.exp(anEta);
+    }
+    for (int k = 0; k < eta.length; k++) {
+      theta[k] = Math.exp(eta[k]) / sum;
+    }
+    return theta;
+  }
+
+  public double[][] computePhi(int[][] nw, int[] nwsum) {
+    double[][] phi = new double[K][V];
+    for (int k = 0; k < K; k++) {
+      for (int w = 0; w < V; w++) {
+        phi[k][w] = (nw[w][k] + beta) / (nwsum[k] + V * beta);
+      }
+    }
+    return phi;
+  }
+
+  public void saveTopicAssign(String filename, int topParticleNum) {
+    try {
+      int[] topIdx = topWeightIdx(topParticleNum);
+      BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+      // Write docs with topic assignments for words and corresponding weights.
+      for (int d = 0; d < observe.size(); ++d) {
+        for (int n = 0; n < observe.get(d).length; ++n) {
+          writer.write(observe.get(d).words[n] + ": ");
+          for (int p = 0; p < topParticleNum; p++) {
+            writer.write(particlesQueue.getFirst().get(topIdx[p]).z.get(d)[n]
+                + " " + weights[topIdx[p]] + ", ");
+          }
+        }
+        writer.write("\n");
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  public void saveTheta(String filename, int topParticleNum) {
+    try {
+      int[] topIdx = topWeightIdx(topParticleNum);
+      BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+      for (int d = 0; d < observe.size(); ++d) {
+        for (int p = 0; p < topParticleNum; p++) {
+          double[] theta = computeTheta(particlesQueue.getFirst().get(topIdx[p]).eta.get(d));
+          for (int k = 0; k < K; ++k) {
+            writer.write(theta[k] + " ");
+          }
+          writer.write(": " + weights[topIdx[p]] + "\n");
+        }
+        writer.write("\n");
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  public void savePhi(String filename, int topParticleNum) {
+    try {
+      int[] topIdx = topWeightIdx(topParticleNum);
+      BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+      for (int p = 0; p < topParticleNum; p++) {
+        double[][] phi = computePhi(nwQueue.getFirst().get(topIdx[p]),
+            nwsumQueue.getFirst().get(topIdx[p]));
+        writer.write(weights[topIdx[p]] + "\n");
+        for (int k = 0; k < K; ++k) {
+          for (int w = 0; w < V; ++w) {
+            writer.write(phi[k][w] + " ");
+          }
+          writer.write("\n");
+        }
+        writer.write("\n");
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  public void saveTopWords(String filename, int topParticleNum) {
+    try {
+      BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+          new FileOutputStream(filename), "UTF-8"));
+      int[] topIdx = topWeightIdx(topParticleNum);
+      for (int p = 0; p < topParticleNum; p++) {
+        writer.write("weight: " + weights[topIdx[p]] + "\n");
+        double[][] phi = computePhi(nwQueue.getFirst().get(topIdx[p]),
+            nwsumQueue.getFirst().get(topIdx[p]));
+        for (int k = 0; k < K; k++) {
+          List<WordFreqPair> wordsFreqList = new ArrayList<WordFreqPair>();
+          for (int w = 0; w < V; w++) {
+            WordFreqPair pair = new WordFreqPair(w + 1, phi[k][w]); // wordId starts from 1
+            wordsFreqList.add(pair);
+          }
+          writer.write("Topic " + k + ":\n");
+          Collections.sort(wordsFreqList);
+          for (int i = 0; i < options.topWords; i++) {
+            String word = corpus.vocabulary.getWord((Integer) wordsFreqList.get(i).first);
+            writer.write("\t" + word + " " + wordsFreqList.get(i).second + "\n");
+          }
+        }
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  public void save(String modelName, int topParticleNum) {
+    saveTopicAssign(options.dir + File.separator + modelName + "TopicAssign", topParticleNum);
+    saveTheta(options.dir + File.separator + modelName + "Theta", topParticleNum);
+    savePhi(options.dir + File.separator + modelName + "Phi", topParticleNum);
+    saveTopWords(options.dir + File.separator + modelName + "TopWords", topParticleNum);
   }
 }
 
