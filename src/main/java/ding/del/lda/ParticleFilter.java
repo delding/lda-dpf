@@ -65,6 +65,8 @@ public class ParticleFilter {
   }
 
   public void initParticles() {
+    setObserve(5); // use first 5 docs to initialize
+    offset += 5;
     ArrayList<int[][]> nw = new ArrayList<int[][]>(numParticles);
     ArrayList<int[]> nwsum = new ArrayList<int[]>(numParticles);
     int[][] nw0 = new int[V][K];
@@ -77,7 +79,6 @@ public class ParticleFilter {
     for (int p = 0; p < numParticles; p++) {
       nw.add(nw0);
     }
-    nwQueue.addFirst(nw);
 
     int[] nwsum0 = new int[K];
     for (int k = 0; k < K; k++) {
@@ -87,9 +88,8 @@ public class ParticleFilter {
     for (int p = 0; p < numParticles; p++) {
       nwsum.add(nwsum0);
     }
-    nwsumQueue.addFirst(nwsum);
 
-    int D = corpus.docs.size();
+    int D = observe.size();
     ArrayList<Particle> particles = new ArrayList<Particle>();
     for (int p = 0; p < numParticles; p++) {
       // initialize alpha
@@ -111,14 +111,14 @@ public class ParticleFilter {
       // initialze z
       ArrayList<int[]> zList = new ArrayList<int[]>();
       for (int d = 0; d < D; d++) {
-        int N = corpus.docs.get(d).length;
+        int N = observe.get(d).length;
         int[] z = new int[N];
         for (int n = 0; n < N; n++) {
           // Topic assignments are initialized to values in [0, K - 1] for each word.
           int topic = rand.nextInt(K);
           z[n] = topic;
           // number of instances of word i (i = documents[m][n]) assigned to topic j (j=z[m][n])
-          nw.get(p)[corpus.docs.get(d).words[n]][topic]++;
+          nw.get(p)[observe.get(d).words[n]][topic]++;
           // total number of words assigned to topic j.
           nwsum.get(p)[topic]++;
         }
@@ -128,6 +128,8 @@ public class ParticleFilter {
     }
     // add initialized particle to the queue
     this.particlesQueue.addFirst(particles);
+    nwQueue.addFirst(nw);
+    nwsumQueue.addFirst(nwsum);
     // initialize weights
     for (int p = 0; p < numParticles; p++) {
       weights[p] = 1.0 / numParticles;
@@ -287,11 +289,11 @@ public class ParticleFilter {
       // propagate eta
       ArrayList<double[]> etaList = new ArrayList<double[]>(D);
       for (int d = 0; d < D; d++) {
-        double[] eta = new double[K - 1];
+        double[] eta = new double[K];
         for (int k = 0; k < K - 1; k++) {
           eta[k] = rand.nextGaussian() + alpha[k];
         }
-        eta[K] = 0.0;
+        eta[K - 1] = 0.0;
         etaList.add(eta);
       }
 
@@ -343,6 +345,7 @@ public class ParticleFilter {
     particlesQueue.addFirst(particles);
     if (particlesQueue.size() > windowSize) {
       particlesQueue.removeLast();
+      // TODO: remove count contributions too
     }
     nwQueue.addFirst(nws);
     if (nwQueue.size() > windowSize) {
@@ -498,7 +501,7 @@ public class ParticleFilter {
         for (int k = 0; k < K; k++) {
           List<WordFreqPair> wordsFreqList = new ArrayList<WordFreqPair>();
           for (int w = 0; w < V; w++) {
-            WordFreqPair pair = new WordFreqPair(w + 1, phi[k][w]); // wordId starts from 1
+            WordFreqPair pair = new WordFreqPair(w, phi[k][w]);
             wordsFreqList.add(pair);
           }
           writer.write("Topic " + k + ":\n");

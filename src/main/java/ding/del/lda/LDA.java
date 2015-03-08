@@ -20,13 +20,13 @@ public class LDA {
       BufferedReader reader = new BufferedReader(new InputStreamReader(
           new FileInputStream(options.dir + File.separator + options.vfile), "UTF-8"));
       String line;
-      int index = 1;
+      int wordId = 0; // wordId starts from 0 unlike txt file in which wordId starts from 1
       while ((line = reader.readLine()) != null) {
         String[] tokens = line.split("\\s");
         String word = tokens[0];
-        nipsVocab.indexToWord.put(index, word);
-        nipsVocab.wordToIndex.put(word, index);
-        index++;
+        nipsVocab.indexToWord.put(wordId, word);
+        nipsVocab.wordToIndex.put(word, wordId);
+        wordId++;
       }
       nipsVocab.V = nipsVocab.indexToWord.size();
       reader.close();
@@ -45,12 +45,12 @@ public class LDA {
       reader.readLine(); // number of non-zero counts: NNZ
 
       String line;
-      int docNum = 1;
+      int docNum = 0; // docId starts from 0
       ArrayList<Integer> doc = new ArrayList<Integer>();
       while ((line = reader.readLine()) != null) {
         String[] tokens = line.split("\\s");
-        int docId = Integer.parseInt(tokens[0]);
-        Integer wordId = Integer.parseInt(tokens[1]);
+        int docId = Integer.parseInt(tokens[0]) - 1;
+        Integer wordId = Integer.parseInt(tokens[1]) - 1; // wordId starts from 0
         int wordCount = Integer.parseInt(tokens[2]);
         if (docId == docNum) {
           while (wordCount > 0) {
@@ -73,15 +73,17 @@ public class LDA {
       e.printStackTrace();
     }
 
-    ParticleFilter pf = new ParticleFilter(5, 500);
+    ParticleFilter pf = new ParticleFilter(5, 50);
     pf.options = options;
     pf.K = options.topicNum;
     pf.beta = options.beta;
     pf.corpus = nips;
     pf.V = nips.vocabulary.V;
     pf.initParticles();
-    for (int i = 0; i < 300; i++) { // 300 iterations, 5 docs per iteration
+    for (int i = 0; i < 299; i++) { // 299 iterations, 5 docs per iteration, first 5 used to initialize
+      System.out.println("iteration: " + (i + 1));
       pf.run(5); // 5 docs per time slice
     }
+    pf.save("nips", 10);
   }
 }
