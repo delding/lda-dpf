@@ -3,9 +3,16 @@ package ding.del.lda;
 public class GibbsSampler {
   LDAModel trnModel; // model to be trained
 
-  public void initialize(LDAOptions options) {
-    trnModel = new LDAModel();
-    trnModel.initialize(options);
+  public GibbsSampler(LDAModel model) {
+    trnModel = model;
+  }
+
+  public void setModel(LDAModel model) {
+    trnModel = model;
+  }
+
+  public void initialize() {
+    trnModel.initialize();
   }
 
   public void estimate() {

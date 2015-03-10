@@ -51,28 +51,22 @@ public class LDAModel {
     ndsum = null;
   }
 
-  protected void initialize(LDAOptions options) {
+  protected void setOptions(LDAOptions options) {
     this.options = options;
 
     modelName = options.modelName;
     K = options.topicNum;
     alpha = options.alpha;
     beta = options.beta;
-
-    corpus = new LDACorpus();
-    loadCorpus();
   }
 
-  /**
-   * Load corpus for estimation
-   */
-  private void loadCorpus() {
-    corpus.loadStopwords(options.dir + File.separator + options.sfile);
-    corpus.loadDocs(options.dir + File.separator + options.cfile);
-
+  public void setCorpus(LDACorpus corpus) {
+    this.corpus = corpus;
     D = corpus.docs.size();
     V = corpus.vocabulary.V;
+  }
 
+  public void initialize() {
     nw = new int[V][K];
     for (int w = 0; w < V; w++) {
       for (int k = 0; k < K; k++) {

@@ -6,34 +6,87 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 
 public class LDACorpus {
+  String corpusName;
   Vocabulary vocabulary;
   Stopwords stopwords;
   ArrayList<Document> docs;
 
   public LDACorpus() {
+    corpusName = "";
     vocabulary = new Vocabulary();
     stopwords = new Stopwords();
     docs = new ArrayList<Document>();
   }
 
-  public LDACorpus(int M) {
+  public LDACorpus(String corpusName) {
+    this.corpusName = corpusName;
     vocabulary = new Vocabulary();
     stopwords = new Stopwords();
-    docs = new ArrayList<Document>(M);
-  }
-
-  public LDACorpus(int M, String sfile) {
-    vocabulary = new Vocabulary();
-    stopwords = new Stopwords();
-    loadStopwords(sfile);
-    docs = new ArrayList<Document>(M);
-  }
-
-  public LDACorpus(String sfile) {
-    vocabulary = new Vocabulary();
-    stopwords = new Stopwords();
-    loadStopwords(sfile);
     docs = new ArrayList<Document>();
+  }
+
+  /**
+   * Load UCI machine learning repository Bag of Words Data Set.
+   * Data format is described at https://archive.ics.uci.edu/ml/datasets/Bag+of+Words
+   *
+   * @param corpusFile name of corpus file
+   * @param vocabFile  name of vocabulary file
+   */
+  public void loadUciData(String corpusFile, String vocabFile) {
+    try {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(
+          new FileInputStream(corpusFile), "UTF-8"));
+      int D = Integer.parseInt(reader.readLine().trim()); // number of docs
+      vocabulary.V = Integer.parseInt(reader.readLine().trim()); // number of words
+      reader.readLine(); // skip NNC (number of non-zero counts)
+      String line;
+      int currentId = 0; // docId starts from 0
+      ArrayList<Integer> doc = new ArrayList<Integer>(D);
+      while ((line = reader.readLine()) != null) {
+        String[] tokens = line.split("\\s");
+        int docId = Integer.parseInt(tokens[0]) - 1;
+        Integer wordId = Integer.parseInt(tokens[1]) - 1; // wordId starts from 0
+        int wordCount = Integer.parseInt(tokens[2]);
+        if (docId == currentId) {
+          while (wordCount > 0) {
+            doc.add(wordId);
+            wordCount--;
+          }
+        } else {
+          docs.add(new Document(doc));
+          doc = new ArrayList<Integer>();
+          currentId = docId;
+          while (wordCount > 0) {
+            doc.add(wordId);
+            wordCount--;
+          }
+        }
+      }
+      docs.add(new Document(doc)); // add last doc to the corpus
+      reader.close();
+    } catch (Exception e) {
+      System.out.println("Read Data Error: " + e.getMessage());
+      e.printStackTrace();
+    }
+
+    try {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(
+          new FileInputStream(vocabFile), "UTF-8"));
+      String line;
+      // WordId starts from 0 unlike UCI file in which wordId starts from 1.
+      int wordId = 0;
+      while ((line = reader.readLine()) != null) {
+        String[] tokens = line.split("\\s");
+        String word = tokens[0];
+        vocabulary.indexToWord.put(wordId, word);
+        vocabulary.wordToIndex.put(word, wordId);
+        wordId++;
+      }
+      vocabulary.V = vocabulary.indexToWord.size();
+      reader.close();
+    } catch (Exception e) {
+      System.err.println("Error while reading vocabulary: " + e.getMessage());
+    }
   }
 
   public void loadStopwords(String filename) {

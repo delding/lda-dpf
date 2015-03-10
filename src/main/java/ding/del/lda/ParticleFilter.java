@@ -21,8 +21,8 @@ public class ParticleFilter {
   // Each array in the queue is the resample index for particles in that time slice
   LinkedList<int[]> resampleIndexQueue;
 
-  // length = numParticles, each item is the weight of a particle path
-  double[] weights;
+  // store log weight of each particle path ,length = numParticles
+  double[] logWeights;
 
   // size = numParticles
   // Each item in the list is a topic word counts matrix corresponding to particle path
@@ -41,32 +41,29 @@ public class ParticleFilter {
     this.numParticles = numParticles;
     particlesQueue = new LinkedList<ArrayList<Particle>>();
     resampleIndexQueue = new LinkedList<int[]>();
-    weights = new double[numParticles];
+    logWeights = new double[numParticles];
     nwQueue = new LinkedList<ArrayList<int[][]>>();
     nwsumQueue = new LinkedList<ArrayList<int[]>>();
   }
 
-  void initialize(LDAOptions options) {
+  void setOptions(LDAOptions options) {
     this.options = options;
     K = options.topicNum;
     beta = options.beta;
-    corpus = new LDACorpus();
-    loadCorpus();
-    initParticles();
   }
 
-  /**
-   * Load training corpus for initialization
-   */
-  private void loadCorpus() {
-    corpus.loadStopwords(options.dir + File.separator + options.sfile);
-    corpus.loadDocs(options.dir + File.separator + options.cfile);
+  public void setCorpus(LDACorpus corpus) {
+    this.corpus = corpus;
     this.V = corpus.vocabulary.V;
   }
 
-  public void initParticles() {
-    setObserve(5); // use first 5 docs to initialize
-    offset += 5;
+  /**
+   * Initialize particle filter
+   *
+   * @param numDocs number of documents used for initialization
+   */
+  public void initialize(int numDocs) {
+    setObserve(numDocs);
     ArrayList<int[][]> nw = new ArrayList<int[][]>(numParticles);
     ArrayList<int[]> nwsum = new ArrayList<int[]>(numParticles);
     int[][] nw0 = new int[V][K];
@@ -75,7 +72,6 @@ public class ParticleFilter {
         nw0[w][k] = 0;
       }
     }
-
     for (int p = 0; p < numParticles; p++) {
       nw.add(nw0);
     }
@@ -84,23 +80,20 @@ public class ParticleFilter {
     for (int k = 0; k < K; k++) {
       nwsum0[k] = 0;
     }
-
     for (int p = 0; p < numParticles; p++) {
       nwsum.add(nwsum0);
     }
 
-    int D = observe.size();
     ArrayList<Particle> particles = new ArrayList<Particle>();
     for (int p = 0; p < numParticles; p++) {
-      // initialize alpha
+      // initialze alpha
       double[] alpha = new double[K - 1];
       for (int k = 0; k < K - 1; k++) {
         alpha[k] = rand.nextGaussian();
       }
-
-      // initialize eta
+      // initialze eta
       ArrayList<double[]> etaList = new ArrayList<double[]>();
-      for (int d = 0; d < D; d++) {
+      for (int d = 0; d < numDocs; d++) {
         double[] eta = new double[K];
         for (int k = 0; k < K - 1; k++) {
           eta[k] = alpha[k] + rand.nextGaussian();
@@ -110,7 +103,7 @@ public class ParticleFilter {
       }
       // initialze z
       ArrayList<int[]> zList = new ArrayList<int[]>();
-      for (int d = 0; d < D; d++) {
+      for (int d = 0; d < numDocs; d++) {
         int N = observe.get(d).length;
         int[] z = new int[N];
         for (int n = 0; n < N; n++) {
@@ -126,14 +119,35 @@ public class ParticleFilter {
       }
       particles.add(new Particle(zList, etaList, alpha));
     }
+    // initialize log weights
+    for (int p = 0; p < numParticles; p++) {
+      logWeights[p] = 0.0;
+    }
     // add initialized particle to the queue
-    this.particlesQueue.addFirst(particles);
+    particlesQueue.addFirst(particles);
     nwQueue.addFirst(nw);
     nwsumQueue.addFirst(nwsum);
-    // initialize weights
-    for (int p = 0; p < numParticles; p++) {
-      weights[p] = 1.0 / numParticles;
+  }
+
+  double[] getNormalizedWeights() {
+    double[] weights = new double[numParticles];
+    double max = logWeights[0];
+    for (int i = 1; i < numParticles; i++) {
+      if (max < logWeights[i]) {
+        max = logWeights[i];
+      }
     }
+    double sum = 0.0;
+    // Scale log weights by subtracting max weight from each component.
+    for (int i = 0; i < numParticles; i++) {
+      logWeights[i] -= max;
+      weights[i] = Math.exp(logWeights[i]);
+      sum += weights[i];
+    }
+    for (int i = 0; i < numParticles; i++) {
+      weights[i] /= sum;
+    }
+    return weights;
   }
 
   void setObserve(int numDocsPerOb) {
@@ -151,10 +165,10 @@ public class ParticleFilter {
    * @param particle topic assignments for observe
    * @param nw cumulative topic word counts matrix belonging to the same path of the particle
    * @param nwsum cumulative word counts sum corresponding to nw
-   * @return the value of likelihood
+   * @return the value of logLikelihood
    */
-  double likelihood(Particle particle, int[][] nw, int[] nwsum) {
-    double probability = 1.0;
+  double logLikelihood(Particle particle, int[][] nw, int[] nwsum) {
+    double logProb = 0.0;
     int D = observe.size();
     for (int d = 0; d < D; d++) {
       double thetaSum = 0.0;
@@ -170,11 +184,13 @@ public class ParticleFilter {
         nwsum[topic] -= 1;
         double Vbeta = V * beta;
 
-        double probWz = (nw[word][topic] + beta) / (nwsum[topic] + Vbeta);
+        // log probability of w given z
+        double logProbWz = Math.log((nw[word][topic] + beta) / (nwsum[topic] + Vbeta));
         nw[word][topic] += 1;
         nwsum[topic] += 1;
-        double probZeta = Math.exp(particle.eta.get(d)[topic]) / thetaSum;
-        probability *= (probWz * probZeta);
+        // log probability of z given eta
+        double logProbZeta = Math.log(Math.exp(particle.eta.get(d)[topic]) / thetaSum);
+        logProb += (logProbWz + logProbZeta);
       }
 
 //      double probEtaAlpha = 1.0;
@@ -183,22 +199,22 @@ public class ParticleFilter {
 //      }
 //      probability *= probEtaAlpha;
     }
-    return probability;
+    return logProb;
   }
 
   /**
-   * Predictive likelihood function
+   * Predictive log likelihood function
    * For new observation, words have not been assigned to topics
-   * when calculating predictive likelihood. Thus, the count of each word doesn't need
+   * when calculating predictive log likelihood. Thus, the count of each word doesn't need
    * to be deducted from topic word matrix. Choose the max topic counts from nw as
    * the predictive topic assignment for each word in the new observation.
    * And use mean of thetas from previous particle.
    *
    * @param nw cumulative topic word counts matrix up to previous observations
    * @param nwsum cumulative word counts sum up to previous observations
-   * @return the value of predictive likelihood
+   * @return the value of predictive logLikelihood
    */
-  double preLikelihood(Particle preParticle, int[][] nw, int[] nwsum) {
+  double preLogLikelihood(Particle preParticle, int[][] nw, int[] nwsum) {
     double[] meanTheta = new double[K];
     for (int k = 0; k < K; k++) {
       double thetaSum = 0.0;
@@ -216,7 +232,7 @@ public class ParticleFilter {
     }
 
     double Vbeta = V * beta;
-    double probability = 1.0;
+    double logProb = 0.0;
     for (Document doc : observe) {
       int N = doc.length;
       for (int n = 0; n < N; n++) {
@@ -229,22 +245,32 @@ public class ParticleFilter {
             topic = k;
           }
         }
-        double probWz = (nw[word][topic] + beta) / (nwsum[topic] + Vbeta);
-        double probZeta = meanTheta[topic];
-        probability *= (probWz * probZeta);
+        double logProbWz = Math.log((nw[word][topic] + beta) / (nwsum[topic] + Vbeta));
+        double logProbZeta = Math.log(meanTheta[topic]);
+        logProb += (logProbWz + logProbZeta);
       }
     }
-    return probability;
+    return logProb;
   }
 
-  void updatePreWeights() {
+  void updatePreLogWeights() {
     for (int p = 0; p < numParticles; p++) {
-      weights[p] *= preLikelihood(particlesQueue.getFirst().get(p), nwQueue.getFirst().get(p),
+      logWeights[p] += preLogLikelihood(particlesQueue.getFirst().get(p), nwQueue.getFirst().get(p),
           nwsumQueue.getFirst().get(p));
     }
   }
 
+  void resample() {
+    resample(numParticles);
+  }
+
+  /**
+   * Systematic resampling
+   *
+   * @param numResamples number of resampled particles
+   */
   void resample(int numResamples) {
+    double[] weights = getNormalizedWeights();
     int[] resampleCounts = new int[numParticles];
     double ran = rand.nextDouble() / numResamples;
     double weightCumulative = 0.0;
@@ -267,7 +293,7 @@ public class ParticleFilter {
       }
     }
     resampleIndexQueue.addFirst(resampleIndex);
-    if (resampleIndexQueue.size() > windowSize){
+    if (resampleIndexQueue.size() > windowSize) {
       resampleIndexQueue.removeLast();
     }
   }
@@ -277,6 +303,8 @@ public class ParticleFilter {
     ArrayList<Particle> particles = new ArrayList<Particle>(numParticles);
     ArrayList<int[][]> nws = new ArrayList<int[][]>(numParticles);
     ArrayList<int[]> nwsums = new ArrayList<int[]>(numParticles);
+    ArrayList<double[]> etaList;
+    ArrayList<int[]> zList;
     for (int index : resampleIndexQueue.getFirst()) {
       // propagate alpha
       double[] alpha = new double[K - 1];
@@ -287,7 +315,7 @@ public class ParticleFilter {
       int D = observe.size();
 
       // propagate eta
-      ArrayList<double[]> etaList = new ArrayList<double[]>(D);
+      etaList = new ArrayList<double[]>(D);
       for (int d = 0; d < D; d++) {
         double[] eta = new double[K];
         for (int k = 0; k < K - 1; k++) {
@@ -298,8 +326,7 @@ public class ParticleFilter {
       }
 
       // propagate z
-      ArrayList<int[]> zList = new ArrayList<int[]>(D);
-
+      zList = new ArrayList<int[]>(D);
       int[][] nw = new int[V][K];
       int[] nwsum = new int[V];
       for (int k = 0; k < K; k++) {
@@ -357,41 +384,30 @@ public class ParticleFilter {
     }
   }
 
-  void updateWeights() {
+  void updateLogWeights() {
+    int[] resampleIndex = resampleIndexQueue.getFirst();
     for (int p = 0; p < numParticles; p++) {
-      int[] resampleIndex = resampleIndexQueue.getFirst();
-      weights[p] = likelihood(particlesQueue.getFirst().get(p), nwQueue.getFirst().get(p),
-          nwsumQueue.getFirst().get(p)) / preLikelihood(particlesQueue.get(1).get(resampleIndex[p]),
+      // window size is at least equal to 2
+      logWeights[p] = logLikelihood(particlesQueue.getFirst().get(p), nwQueue.getFirst().get(p),
+          nwsumQueue.getFirst().get(p)) - preLogLikelihood(particlesQueue.get(1).get(resampleIndex[p]),
           nwQueue.get(1).get(resampleIndex[p]), nwsumQueue.get(1).get(resampleIndex[p]));
-    }
-    double weightSum = 0.0;
-    for (double weight : weights) {
-      weightSum += weight;
-    }
-    for (int p = 0; p < numParticles; p++) {
-      weights[p] /= weightSum;
     }
   }
 
   public void run(int numDocsPerOb) {
     setObserve(numDocsPerOb);
-    updatePreWeights();
-    resample(numParticles);
+    updatePreLogWeights();
+    resample();
     propagate();
-    updateWeights();
-  }
-
-  private double gaussian(double x, double mu , double sigma) {
-    return Math.exp(-Math.pow(mu - x, 2) / Math.pow(sigma, 2) / 2.0)
-        / Math.sqrt(2.0 * Math.PI * Math.pow(sigma, 2));
+    updateLogWeights();
   }
 
   public int[] topWeightIdx(int topParticleNum) {
     int[] topIdx = new int[topParticleNum];
     Map<Double, Integer> sortedMap = new TreeMap<Double, Integer>();
     for (int p = 0; p < numParticles; p++) {
-      // multiplying -1 makes max weight become first value in natural ordering
-      sortedMap.put(-1 * weights[p], p);
+      // multiplying -1 makes max log weight become first value in natural ordering
+      sortedMap.put(-1 * logWeights[p], p);
     }
     int i = 0;
     for(Map.Entry<Double, Integer> entry : sortedMap.entrySet()) {
@@ -427,6 +443,7 @@ public class ParticleFilter {
   }
 
   public void saveTopicAssign(String filename, int topParticleNum) {
+    double[] weights = getNormalizedWeights();
     try {
       int[] topIdx = topWeightIdx(topParticleNum);
       BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
@@ -448,6 +465,7 @@ public class ParticleFilter {
   }
 
   public void saveTheta(String filename, int topParticleNum) {
+    double[] weights = getNormalizedWeights();
     try {
       int[] topIdx = topWeightIdx(topParticleNum);
       BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
@@ -468,6 +486,7 @@ public class ParticleFilter {
   }
 
   public void savePhi(String filename, int topParticleNum) {
+    double[] weights = getNormalizedWeights();
     try {
       int[] topIdx = topWeightIdx(topParticleNum);
       BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
@@ -490,6 +509,7 @@ public class ParticleFilter {
   }
 
   public void saveTopWords(String filename, int topParticleNum) {
+    double[] weights = getNormalizedWeights();
     try {
       BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
           new FileOutputStream(filename), "UTF-8"));
@@ -523,6 +543,11 @@ public class ParticleFilter {
     saveTheta(options.dir + File.separator + modelName + "Theta", topParticleNum);
     savePhi(options.dir + File.separator + modelName + "Phi", topParticleNum);
     saveTopWords(options.dir + File.separator + modelName + "TopWords", topParticleNum);
+  }
+
+  private double gaussian(double x, double mu , double sigma) {
+    return Math.exp(-Math.pow(mu - x, 2) / Math.pow(sigma, 2) / 2.0)
+        / Math.sqrt(2.0 * Math.PI * Math.pow(sigma, 2));
   }
 }
 
