@@ -11,15 +11,17 @@ public class LDA {
     String corpusFile = options.dir + File.separator + options.cfile;
     String vocabFile = options.dir + File.separator + options.vfile;
     nips.loadUciData(corpusFile, vocabFile);
+    nips.loadUciData(corpusFile, vocabFile, 701);
 
     LDAModel model = new LDAModel();
     model.setOptions(options);
     model.setCorpus(nips);
     GibbsSampler sampler = new GibbsSampler(model);
+    // train data use doctrain.txt
     sampler.initialize();
     sampler.estimate();
 
-    ParticleFilter pf = new ParticleFilter(2, 50); // window size = 2, particle number = 50
+    ParticleFilter pf = new ParticleFilter(2, 30); // window size = 2, particle number = 50
     pf.setOptions(options);
     pf.setCorpus(nips);
     pf.initialize(5);
@@ -31,5 +33,14 @@ public class LDA {
         pf.saveTopWords(options.dir + File.separator + "iter" + (i + 1) + ": TopWords", 5);
       }
     }
+
+    // compute perplexity use doctest.txt
+    String nwFile = options.dir + File.separator + "trainedNw";
+    sampler.initFromFile(nwFile);
+    double perpGibbs = sampler.trnModel.computePerplexity(nips.docs, 1);
+    System.out.println("Gibbs Perplexity: " + perpGibbs);
+    pf.initFromFile(nwFile);
+    double perpPF = pf.computePerplexity(nips.docs);
+    System.out.println("PF Perplexity: " + perpPF);
   }
 }

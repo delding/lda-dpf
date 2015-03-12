@@ -1,10 +1,6 @@
 package ding.del.lda;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,10 +21,10 @@ public class LDAModel {
   double[][] phi; // topic-word distributions, size K * V
 
   int[][] z; // topic assignments for each word, size D * doc.size()
-  int[][] nw; // nw[i][j] denotes number of word/term i assigned to topic j, size V * K
-  int[][] nd; // nd[i][j] denotes number of words in document i assigned to topic j, size D * K
-  int[] nwsum; // nwsum[j] denotes total number of words assigned to topic j, size K
-  int[] ndsum; // ndsum[i] denotes total number of words in document i, size D
+  int[][] nw; // nw[w][k] denotes number of word/term w assigned to topic k, size V * K
+  int[][] nd; // nd[d][k] denotes number of words in document d assigned to topic k, size D * K
+  int[] nwsum; // nwsum[k] denotes total number of words assigned to topic k, size K
+  int[] ndsum; // ndsum[d] denotes total number of words in document d, size D
 
   public LDAModel() {
     modelName = "";
@@ -67,29 +63,10 @@ public class LDAModel {
   }
 
   public void initialize() {
-    nw = new int[V][K];
-    for (int w = 0; w < V; w++) {
-      for (int k = 0; k < K; k++) {
-        nw[w][k] = 0;
-      }
-    }
-
+    nw = new int[V][K]; // default int values in array are zeros
     nd = new int[D][K];
-    for (int d = 0; d < D; d++) {
-      for (int k = 0; k < K; k++) {
-        nd[d][k] = 0;
-      }
-    }
-
     nwsum = new int[K];
-    for (int k = 0; k < K; k++) {
-      nwsum[k] = 0;
-    }
-
     ndsum = new int[D];
-    for (int d = 0; d < D; d++) {
-      ndsum[d] = 0;
-    }
 
     // The z_i are initialized to values in [0, K - 1] for each word.
     z = new int[D][];
@@ -114,6 +91,34 @@ public class LDAModel {
     phi = new double[K][V];
   }
 
+  public void initFromFile(String nwFile) {
+    nw = new int[V][K];
+    nwsum = new int[K];
+    try {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(
+          new FileInputStream(nwFile), "UTF-8"));
+      String line;
+      int w = 0;
+      while ((line = reader.readLine()) != null) {
+        String[] counts = line.split("\\s");
+        for (int k = 0; k < K; k++) {
+          nw[w][k] = Integer.parseInt(counts[k]);
+        }
+        w++;
+      }
+      reader.close();
+    } catch (Exception e) {
+      System.out.println("Read Data Error: " + e.getMessage());
+      e.printStackTrace();
+    }
+    for (int k = 0; k < K; k++) {
+      nwsum[k] = 0;
+      for (int w = 0; w < V; w++) {
+        nwsum[k] += nw[w][k];
+      }
+    }
+  }
+
   /**
    * Save word-topic assignments
    */
@@ -134,7 +139,7 @@ public class LDAModel {
   }
 
   /**
-   * Save theta (topic distribution)
+   * Save theta (document topic distribution)
    */
   public void saveTheta(String filename) {
     try {
@@ -142,6 +147,24 @@ public class LDAModel {
       for (int i = 0; i < D; ++i) {
         for (int j = 0; j < K; ++j) {
           writer.write(theta[i][j] + " ");
+        }
+        writer.write("\n");
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Save nd
+   */
+  public void saveNd(String filename) {
+    try {
+      BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+      for (int d = 0; d < D; ++d) {
+        for (int k = 0; k < K; ++k) {
+          writer.write(nd[d][k] + " ");
         }
         writer.write("\n");
       }
@@ -160,6 +183,24 @@ public class LDAModel {
       for (int i = 0; i < K; ++i) {
         for (int j = 0; j < V; ++j) {
           writer.write(phi[i][j] + " ");
+        }
+        writer.write("\n");
+      }
+      writer.close();
+    } catch (Exception e) {
+      System.err.println("Error while saving topic assignments: " + e.getMessage());
+    }
+  }
+
+  /**
+   * save nw
+   */
+  public void saveNw(String filename) {
+    try {
+      BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+      for (int w = 0; w < V; ++w) {
+        for (int k = 0; k < K; ++k) {
+          writer.write(nw[w][k] + " ");
         }
         writer.write("\n");
       }
@@ -222,5 +263,83 @@ public class LDAModel {
     saveTheta(options.dir + File.separator + modelName + "Theta");
     savePhi(options.dir + File.separator + modelName + "Phi");
     saveTopWords(options.dir + File.separator + modelName + "TopWords");
+  }
+
+  /**
+   * compute perplexity of hold out documents
+   *
+   * @param docs hold out documents
+   * @param iterNum numbers of Gibbs sampling iteration before computing perplexity
+   * @return perplexity
+   */
+  public double computePerplexity(ArrayList<Document> docs, int iterNum) {
+    int DNew = docs.size();
+    int[][] ndNew = new int[DNew][K];
+    int[] ndsumNew = new int[DNew];
+    int[][] zNew = new int[DNew][];
+    for (int d = 0; d < DNew; d++) {
+      int N = docs.get(d).length;
+      zNew[d] = new int[N];
+      for (int n = 0; n < N; n++) {
+        int topic = (int) (Math.random() * K);
+        zNew[d][n] = topic;
+//        nw[docs.get(d).words[n]][topic]++;
+        ndNew[d][topic]++;
+//        nwsum[topic]++;
+      }
+      ndsumNew[d] = N;
+    }
+    double Vbeta = V * beta;
+    double Kalpha = K * alpha;
+    for (int i = 0; i < iterNum; i++) {
+      for (int d = 0; d < DNew; d++) {
+        for (int n = 0; n < docs.get(d).length; n++) {
+          int topic = zNew[d][n];
+          int w = docs.get(d).words[n];
+//          nw[w][topic] -= 1;
+          ndNew[d][topic] -= 1;
+//          nwsum[topic] -= 1;
+          ndsumNew[d] -= 1;
+
+          double[] p = new double[K];
+          for (int k = 0; k < K; k++) {
+            p[k] = (nw[w][k] + beta) / (nwsum[k] + Vbeta)
+                * (ndNew[d][k] + alpha) / (ndsumNew[d] + Kalpha);
+          }
+
+          for (int k = 1; k < K; k++) {
+            p[k] += p[k - 1];
+          }
+          double u = Math.random() * p[K - 1];
+          // If topic = K - 2 still no break, topic goes to K - 1, loop ends
+          for (topic = 0; topic < K - 1; topic++) {
+            if (p[topic] > u)
+              break;
+          }
+          zNew[d][n] = topic;
+//          nw[w][topic] += 1;
+          ndNew[d][topic] += 1;
+//          nwsum[topic] += 1;
+          ndsumNew[d] += 1;
+        }
+      }
+    }
+    double perplexity = 0.0;
+    int numWords = 0;
+    double logProb = 0.0;
+    for (int d = 0; d < docs.size(); d++) { // hold out documents
+      for (int w : docs.get(d).words) {
+        numWords++;
+        double probW = 0.0;
+        // sum over all topics
+        for (int k = 0; k < K; k++) {
+          probW += (nw[w][k] + beta) / (nwsum[k] + Vbeta)
+              * (ndNew[d][k] + alpha) / (ndsumNew[d] + Kalpha);
+        }
+        logProb += Math.log(probW);
+      }
+    }
+    perplexity += Math.exp(-1 * logProb / numWords);
+    return perplexity;
   }
 }

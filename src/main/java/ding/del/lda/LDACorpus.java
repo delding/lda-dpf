@@ -25,6 +25,10 @@ public class LDACorpus {
     docs = new ArrayList<Document>();
   }
 
+  public void loadUciData(String corpusFile, String vocabFile) {
+    // UCI data doc id starts from 1
+    loadUciData(corpusFile, vocabFile, 1);
+  }
   /**
    * Load UCI machine learning repository Bag of Words Data Set.
    * Data format is described at https://archive.ics.uci.edu/ml/datasets/Bag+of+Words
@@ -32,7 +36,7 @@ public class LDACorpus {
    * @param corpusFile name of corpus file
    * @param vocabFile  name of vocabulary file
    */
-  public void loadUciData(String corpusFile, String vocabFile) {
+  public void loadUciData(String corpusFile, String vocabFile, int docStartId) {
     try {
       BufferedReader reader = new BufferedReader(new InputStreamReader(
           new FileInputStream(corpusFile), "UTF-8"));
@@ -40,7 +44,7 @@ public class LDACorpus {
       vocabulary.V = Integer.parseInt(reader.readLine().trim()); // number of words
       reader.readLine(); // skip NNC (number of non-zero counts)
       String line;
-      int currentId = 0; // docId starts from 0
+      int currentId = docStartId - 1; // default docId starts from 0 instead of 1
       ArrayList<Integer> doc = new ArrayList<Integer>(D);
       while ((line = reader.readLine()) != null) {
         String[] tokens = line.split("\\s");

@@ -1,15 +1,33 @@
 package ding.del.lda;
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.TreeMap;
 
 public class ParticleFilter {
   LDACorpus corpus =  null; // a single observation in this corpus contains a mini-batch of documents
   LDAOptions options;
 
   int V;
-  int K = 50;
+  int K = 100;
   double beta = 0.1;
+  // standard deviation of alpha and eta
+  // A bigger std can make document-topic distribution more concentrated on a few topics.
+  // This produces a similar effect as choosing small hyper-parameter for dirichlet prior.
+  double alphaStd = 0.5;
+  double etaStd = 0.2;
 
   int windowSize; // length of sliding window
   int numParticles;
@@ -46,7 +64,7 @@ public class ParticleFilter {
     nwsumQueue = new LinkedList<ArrayList<int[]>>();
   }
 
-  void setOptions(LDAOptions options) {
+  public void setOptions(LDAOptions options) {
     this.options = options;
     K = options.topicNum;
     beta = options.beta;
@@ -89,19 +107,19 @@ public class ParticleFilter {
       // initialze alpha
       double[] alpha = new double[K - 1];
       for (int k = 0; k < K - 1; k++) {
-        alpha[k] = rand.nextGaussian();
+        alpha[k] = rand.nextGaussian() * alphaStd;
       }
       // initialze eta
       ArrayList<double[]> etaList = new ArrayList<double[]>();
       for (int d = 0; d < numDocs; d++) {
         double[] eta = new double[K];
         for (int k = 0; k < K - 1; k++) {
-          eta[k] = alpha[k] + rand.nextGaussian();
+          eta[k] = alpha[k] + rand.nextGaussian() * etaStd;
         }
         eta[K - 1] = 0.0;
         etaList.add(eta);
       }
-      // initialze z
+      // initialize z
       ArrayList<int[]> zList = new ArrayList<int[]>();
       for (int d = 0; d < numDocs; d++) {
         int N = observe.get(d).length;
@@ -118,6 +136,71 @@ public class ParticleFilter {
         zList.add(z);
       }
       particles.add(new Particle(zList, etaList, alpha));
+    }
+    // initialize log weights
+    for (int p = 0; p < numParticles; p++) {
+      logWeights[p] = 0.0;
+    }
+    // add initialized particle to the queue
+    particlesQueue.addFirst(particles);
+    nwQueue.addFirst(nw);
+    nwsumQueue.addFirst(nwsum);
+  }
+
+  /**
+   * initialize from existing file
+   *
+   * @param nwFile file that stores word-topic counts
+   */
+  public void initFromFile(String nwFile) {
+    int[][] nw0 = new int[V][K];
+    int[] nwsum0 = new int[K];
+    try {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(
+          new FileInputStream(nwFile), "UTF-8"));
+      String line;
+      int w = 0;
+      while ((line = reader.readLine()) != null) {
+        String[] counts = line.split("\\s");
+        for (int k = 0; k < K; k++) {
+          nw0[w][k] = Integer.parseInt(counts[k]);
+        }
+        w++;
+      }
+      reader.close();
+    } catch (Exception e) {
+      System.out.println("Read Data Error: " + e.getMessage());
+      e.printStackTrace();
+    }
+    for (int k = 0; k < K; k++) {
+      nwsum0[k] = 0;
+      for (int w = 0; w < V; w++) {
+        nwsum0[k] += nw0[w][k];
+      }
+    }
+    // initialize alpha
+    double[] alpha = new double[K - 1];
+    for (int k = 0; k < K - 1; k++) {
+      alpha[k] = rand.nextGaussian() * alphaStd;
+    }
+    // initialze eta, set d = 1
+    ArrayList<double[]> etaList = new ArrayList<double[]>();
+    for (int d = 0; d < 1; d++) {
+      double[] eta = new double[K];
+      for (int k = 0; k < K - 1; k++) {
+        eta[k] = alpha[k] + rand.nextGaussian() * etaStd;
+      }
+      eta[K - 1] = 0.0;
+      etaList.add(eta);
+    }
+
+    ArrayList<int[][]> nw = new ArrayList<int[][]>();
+    ArrayList<int[]> nwsum = new ArrayList<int[]>();
+    ArrayList<Particle> particles = new ArrayList<Particle>();
+    for (int p = 0; p < numParticles; p++) {
+      nw.add(nw0);
+      nwsum.add(nwsum0);
+      particles.add(new Particle(alpha, etaList));
     }
     // initialize log weights
     for (int p = 0; p < numParticles; p++) {
@@ -309,7 +392,7 @@ public class ParticleFilter {
       // propagate alpha
       double[] alpha = new double[K - 1];
       for (int k = 0; k < K - 1; k++) {
-        alpha[k] = rand.nextGaussian() + preParticles.get(index).alpha[k];
+        alpha[k] = rand.nextGaussian() * alphaStd  + preParticles.get(index).alpha[k];
       }
 
       int D = observe.size();
@@ -319,7 +402,7 @@ public class ParticleFilter {
       for (int d = 0; d < D; d++) {
         double[] eta = new double[K];
         for (int k = 0; k < K - 1; k++) {
-          eta[k] = rand.nextGaussian() + alpha[k];
+          eta[k] = rand.nextGaussian() * etaStd + alpha[k];
         }
         eta[K - 1] = 0.0;
         etaList.add(eta);
@@ -543,6 +626,50 @@ public class ParticleFilter {
     saveTheta(options.dir + File.separator + modelName + "Theta", topParticleNum);
     savePhi(options.dir + File.separator + modelName + "Phi", topParticleNum);
     saveTopWords(options.dir + File.separator + modelName + "TopWords", topParticleNum);
+  }
+
+  /**
+   * compute perplexity on future (test) data set
+   *
+   * @param docs incoming or test documents set
+   */
+  public double computePerplexity(ArrayList<Document> docs) {
+    observe = docs;
+    updatePreLogWeights();
+    resample();
+    propagate();
+    updateLogWeights();
+
+    double[] weights = getNormalizedWeights();
+    double Vbeta = V * beta;
+    double perplexity = 0.0;
+    for (int p = 0; p < numParticles; p++) {
+      int numWords = 0;
+      double logProb = 0.0;
+      for (int d = 0; d < docs.size(); d++) {
+        double[] eta = particlesQueue.getFirst().get(p).eta.get(d);
+        double thetaSum = 0.0;
+        for (double anEta : eta) {
+          thetaSum += Math.exp(anEta);
+        }
+        double[] theta = new double[K];
+        for (int k = 0; k < K; k++) {
+          theta[k] = Math.exp(theta[k]) / thetaSum;
+        }
+        for (int w : docs.get(d).words) {
+          numWords++;
+          double probW = 0.0;
+          // sume over all topics
+          for (int k = 0; k < K; k++) {
+            probW += (nwQueue.getFirst().get(p)[w][k] + beta)
+                / (nwsumQueue.getFirst().get(p)[k] + Vbeta) * theta[k];
+          }
+          logProb += Math.log(probW);
+        }
+      }
+      perplexity += Math.exp(-1 * logProb / numWords) * weights[p];
+    }
+    return perplexity;
   }
 
   private double gaussian(double x, double mu , double sigma) {

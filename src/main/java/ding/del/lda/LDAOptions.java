@@ -23,7 +23,7 @@ public class LDAOptions {
   double beta = 0.1;
 
 
-  int iterationNum = 1000; // number of Gibbs sampling iteration
+  int iterationNum = 500; // number of Gibbs sampling iteration
   int burnIn = 100; // number of iterations for burn-in period
   int saveInterval = 100; // saving period
   int topWords = 10; // the number of most likely words to be printed for each topic

@@ -18,5 +18,10 @@ public class Particle {
     this.alpha = alpha;
   }
 
-
+  public Particle(double alpha[], ArrayList<double[]> eta) {
+    numDocuments = 0;
+    z = null;
+    this.eta = eta;
+    this.alpha = alpha;
+  }
 }
