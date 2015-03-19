@@ -1,4 +1,6 @@
 # lda-dpf
-distributed particle filters for Latent Dirichlet Allocation
 
-Particle filter implementation for LDA models under Lambda architecture.
+This repo aims to build a data pipeline for topic modeling and inference based on the Lambda architecture ([http://lambda-architecture.net/]).
+Currently, it implements Gibbs sampling and particle filtering methods for Latent Dirichlet Allocation (LDA) models
+Dynamic Topic Model (DTM).
+
