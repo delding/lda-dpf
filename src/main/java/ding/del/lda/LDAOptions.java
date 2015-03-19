@@ -21,8 +21,6 @@ public class LDAOptions {
   int topicNum = 100;
   double alpha = 50.0 / topicNum;
   double beta = 0.1;
-
-
   int iterationNum = 500; // number of Gibbs sampling iteration
   int burnIn = 100; // number of iterations for burn-in period
   int saveInterval = 100; // saving period
@@ -96,25 +94,32 @@ public class LDAOptions {
   private static Options buildOptions() {
     Options options = new Options();
 
-    Option modelname = OptionBuilder.withArgName("name").hasArg().withDescription("model name").create("modelname");
+    Option modelname = OptionBuilder.withArgName("name").hasArg().withDescription("model name")
+        .create("modelname");
     options.addOption(modelname);
 
-    Option dir = OptionBuilder.withArgName("path").hasArg().withDescription("directory").create("dir");
+    Option dir = OptionBuilder.withArgName("path").hasArg().withDescription("directory")
+        .create("dir");
     options.addOption(dir);
 
-    Option cfile = OptionBuilder.withArgName("file").hasArg().withDescription("corpus file").create("cfile");
+    Option cfile = OptionBuilder.withArgName("file").hasArg().withDescription("corpus file")
+        .create("cfile");
     options.addOption(cfile);
 
-    Option vfile = OptionBuilder.withArgName("file").hasArg().withDescription("vocabulary file").create("vfile");
+    Option vfile = OptionBuilder.withArgName("file").hasArg().withDescription("vocabulary file")
+        .create("vfile");
     options.addOption(vfile);
 
-    Option sfile = OptionBuilder.withArgName("file").hasArg().withDescription("stopwords file").create("sfile");
+    Option sfile = OptionBuilder.withArgName("file").hasArg().withDescription("stopwords file")
+        .create("sfile");
     options.addOption(sfile);
 
-    Option alpha = OptionBuilder.withArgName("value").hasArg().withDescription("alpha").create("alpha");
+    Option alpha = OptionBuilder.withArgName("value").hasArg().withDescription("alpha")
+        .create("alpha");
     options.addOption(alpha);
 
-    Option beta = OptionBuilder.withArgName("value").hasArg().withDescription("beta").create("beta");
+    Option beta = OptionBuilder.withArgName("value").hasArg().withDescription("beta")
+        .create("beta");
     options.addOption(beta);
 
     Option ntopics = OptionBuilder.withArgName("number").hasArg().withDescription(

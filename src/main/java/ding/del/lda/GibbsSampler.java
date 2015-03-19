@@ -105,7 +105,8 @@ public class GibbsSampler {
   public void computeTheta() {
     for (int m = 0; m < trnModel.D; m++) {
       for (int k = 0; k < trnModel.K; k++) {
-        trnModel.theta[m][k] = (trnModel.nd[m][k] + trnModel.alpha) / (trnModel.ndsum[m] + trnModel.K * trnModel.alpha);
+        trnModel.theta[m][k] = (trnModel.nd[m][k] + trnModel.alpha)
+            / (trnModel.ndsum[m] + trnModel.K * trnModel.alpha);
       }
     }
   }
@@ -113,7 +114,8 @@ public class GibbsSampler {
   public void computePhi() {
     for (int k = 0; k < trnModel.K; k++) {
       for (int w = 0; w < trnModel.V; w++) {
-        trnModel.phi[k][w] = (trnModel.nw[w][k] + trnModel.beta) / (trnModel.nwsum[k] + trnModel.V * trnModel.beta);
+        trnModel.phi[k][w] = (trnModel.nw[w][k] + trnModel.beta)
+            / (trnModel.nwsum[k] + trnModel.V * trnModel.beta);
       }
     }
   }

@@ -23,7 +23,6 @@ public class LDAModel {
   double alpha; // symmetric hyperparameter of document-topic Dirichlet prior
   double beta; // symmetric hyperparameter of topic-word (term) Dirichlet prior
 
-
   double[][] theta; // document-topic distributions, size D * K
   double[][] phi; // topic-word distributions, size K * V
 

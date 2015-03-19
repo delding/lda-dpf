@@ -150,7 +150,72 @@ public class ParticleFilter {
     nwsumQueue.addFirst(nwsum);
   }
 
-  double[] getNormalizedWeights() {
+  /**
+   * initialize from existing file
+   *
+   * @param nwFile file that stores word-topic counts
+   */
+  public void initFromFile(String nwFile) {
+    int[][] nw0 = new int[V][K];
+    int[] nwsum0 = new int[K];
+    try {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(
+          new FileInputStream(nwFile), "UTF-8"));
+      String line;
+      int w = 0;
+      while ((line = reader.readLine()) != null) {
+        String[] counts = line.split("\\s");
+        for (int k = 0; k < K; k++) {
+          nw0[w][k] = Integer.parseInt(counts[k]);
+        }
+        w++;
+      }
+      reader.close();
+    } catch (Exception e) {
+      System.out.println("Read Data Error: " + e.getMessage());
+      e.printStackTrace();
+    }
+    for (int k = 0; k < K; k++) {
+      nwsum0[k] = 0;
+      for (int w = 0; w < V; w++) {
+        nwsum0[k] += nw0[w][k];
+      }
+    }
+    // initialize alpha
+    double[] alpha = new double[K - 1];
+    for (int k = 0; k < K - 1; k++) {
+      alpha[k] = rand.nextGaussian() * alphaStd;
+    }
+    // initialze eta, set d = 1
+    ArrayList<double[]> etaList = new ArrayList<double[]>();
+    for (int d = 0; d < 1; d++) {
+      double[] eta = new double[K];
+      for (int k = 0; k < K - 1; k++) {
+        eta[k] = alpha[k] + rand.nextGaussian() * etaStd;
+      }
+      eta[K - 1] = 0.0;
+      etaList.add(eta);
+    }
+
+    ArrayList<int[][]> nw = new ArrayList<int[][]>();
+    ArrayList<int[]> nwsum = new ArrayList<int[]>();
+    ArrayList<Particle> particles = new ArrayList<Particle>();
+    for (int p = 0; p < numParticles; p++) {
+      nw.add(nw0);
+      nwsum.add(nwsum0);
+      particles.add(new Particle(alpha, etaList));
+    }
+    // initialize log weights
+    for (int p = 0; p < numParticles; p++) {
+      logWeights[p] = 0.0;
+    }
+    // add initialized particle to the queue
+    particlesQueue.addFirst(particles);
+    nwQueue.addFirst(nw);
+    nwsumQueue.addFirst(nwsum);
+  }
+
+  public double[] getNormalizedWeights() {
     double[] weights = new double[numParticles];
     double max = logWeights[0];
     for (int i = 1; i < numParticles; i++) {
@@ -176,7 +241,7 @@ public class ParticleFilter {
    *
    * @param numDocsPerOb number of documents per observation
    */
-  void setObserve(int numDocsPerOb) {
+  public void setObserve(int numDocsPerOb) {
     ArrayList<Document> observe = new ArrayList<Document>(numDocsPerOb);
     for (int i = 0; i < numDocsPerOb; i++) {
       observe.add(corpus.docs.get(offset + i));
@@ -619,71 +684,6 @@ public class ParticleFilter {
       perplexity += Math.exp(-1 * logProb / numWords) * weights[p];
     }
     return perplexity;
-  }
-
-  /**
-   * initialize from existing file
-   *
-   * @param nwFile file that stores word-topic counts
-   */
-  public void initFromFile(String nwFile) {
-    int[][] nw0 = new int[V][K];
-    int[] nwsum0 = new int[K];
-    try {
-      BufferedReader reader = new BufferedReader(new InputStreamReader(
-          new FileInputStream(nwFile), "UTF-8"));
-      String line;
-      int w = 0;
-      while ((line = reader.readLine()) != null) {
-        String[] counts = line.split("\\s");
-        for (int k = 0; k < K; k++) {
-          nw0[w][k] = Integer.parseInt(counts[k]);
-        }
-        w++;
-      }
-      reader.close();
-    } catch (Exception e) {
-      System.out.println("Read Data Error: " + e.getMessage());
-      e.printStackTrace();
-    }
-    for (int k = 0; k < K; k++) {
-      nwsum0[k] = 0;
-      for (int w = 0; w < V; w++) {
-        nwsum0[k] += nw0[w][k];
-      }
-    }
-    // initialize alpha
-    double[] alpha = new double[K - 1];
-    for (int k = 0; k < K - 1; k++) {
-      alpha[k] = rand.nextGaussian() * alphaStd;
-    }
-    // initialze eta, set d = 1
-    ArrayList<double[]> etaList = new ArrayList<double[]>();
-    for (int d = 0; d < 1; d++) {
-      double[] eta = new double[K];
-      for (int k = 0; k < K - 1; k++) {
-        eta[k] = alpha[k] + rand.nextGaussian() * etaStd;
-      }
-      eta[K - 1] = 0.0;
-      etaList.add(eta);
-    }
-
-    ArrayList<int[][]> nw = new ArrayList<int[][]>();
-    ArrayList<int[]> nwsum = new ArrayList<int[]>();
-    ArrayList<Particle> particles = new ArrayList<Particle>();
-    for (int p = 0; p < numParticles; p++) {
-      nw.add(nw0);
-      nwsum.add(nwsum0);
-      particles.add(new Particle(alpha, etaList));
-    }
-    // initialize log weights
-    for (int p = 0; p < numParticles; p++) {
-      logWeights[p] = 0.0;
-    }
-    // add initialized particle to the queue
-    particlesQueue.addFirst(particles);
-    nwQueue.addFirst(nw);
-    nwsumQueue.addFirst(nwsum);
   }
 
   private double gaussian(double x, double mu , double sigma) {
